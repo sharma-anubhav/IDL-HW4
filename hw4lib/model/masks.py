@@ -15,18 +15,28 @@ Specification:
 - Mask should be on same device as input tensor
 '''
 def PadMask(padded_input, input_lengths):
-    """ 
-    Create a mask to identify non-padding positions. 
+    """
+    Create a mask to identify non-padding positions.
     Args:
         padded_input: The input tensor with padding, shape (N, T, ...) or (N, T).
         input_lengths: The actual lengths of each sequence before padding, shape (N,).
     Returns:
-        A boolean mask tensor with shape (N, T), where: 
-            - padding positions are marked with True 
+        A boolean mask tensor with shape (N, T), where:
+            - padding positions are marked with True
             - non-padding positions are marked with False.
     """
-    # TODO: Implement PadMask
-    raise NotImplementedError # Remove once implemented
+    batch_size, seq_len = padded_input.shape[0], padded_input.shape[1]
+
+    # Create a range tensor for sequence positions
+    positions = torch.arange(seq_len, device=padded_input.device).unsqueeze(0)  # (1, T)
+
+    # Expand input_lengths to match dimensions
+    lengths_expanded = input_lengths.unsqueeze(1)  # (N, 1)
+
+    # Create mask: True where position >= length (padding), False where position < length (valid)
+    mask = positions >= lengths_expanded  # (N, T)
+
+    return mask
 
 ''' 
 TODO: Implement this function.
@@ -40,17 +50,22 @@ Specification:
 - Mask should be on same device as input tensor
 - Mask should be upper triangular (excluding diagonal)
 '''
-def CausalMask(padded_input):
-    """ 
-    Create a mask to identify non-causal positions. 
+def CausalMask(seq_len, device):
+    """
+    Create a mask to identify non-causal positions.
     Args:
-        padded_input: The input tensor with padding, shape (N, T, ...) or (N, T).
-    
+        seq_len: The sequence length T.
+        device: The device to place the mask on.
+
     Returns:
-        A boolean mask tensor with shape (T, T), where: 
-            - non-causal positions (don't attend to) are marked with True 
+        A boolean mask tensor with shape (T, T), where:
+            - non-causal positions (don't attend to) are marked with True
             - causal positions (can attend to) are marked with False.
     """
-    # TODO: Implement CausalMask
-    raise NotImplementedError # Remove once implemented
+    # Create a causal mask where future positions are masked out
+    # Create a triangular matrix: rows are query positions, columns are key positions
+    # We want positions to attend to themselves and previous positions only
+    causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1).bool()
+
+    return causal_mask
 

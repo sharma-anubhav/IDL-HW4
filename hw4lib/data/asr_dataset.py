@@ -85,7 +85,7 @@ class ASRDataset(Dataset):
 
         # Set up data paths
         root = config['root']
-        self.fbank_dir = os.path.join(root, 'hw4p2_data', partition, 'fbank')
+        self.fbank_dir = os.path.join(root, partition, 'fbank')
 
         # Get all feature files in the feature directory in sorted order
         self.fbank_files = sorted(os.listdir(self.fbank_dir))
@@ -102,7 +102,7 @@ class ASRDataset(Dataset):
         # Why will test-clean need to be handled differently?
         if self.partition != "test-clean":
             # Use root and partition to get the text directory
-            self.text_dir = os.path.join(root, 'hw4p2_data', partition, 'text')
+            self.text_dir = os.path.join(root, partition, 'text')
 
             # Get all text files in the text directory in sorted order
             self.text_files = sorted(os.listdir(self.text_dir))
@@ -178,7 +178,7 @@ class ASRDataset(Dataset):
                 self.total_chars += len(transcript)
 
                 # Use tokenizer to encode the transcript (see tokenizer.encode for details)
-                tokenized = self.tokenizer.encode(transcript).ids
+                tokenized = self.tokenizer.encode(transcript)
 
                 # Track token count (excluding special tokens)
                 # DO NOT MODIFY
@@ -289,7 +289,7 @@ class ASRDataset(Dataset):
         batch_feats = [feat.t() for feat, _, _ in batch]  # List of (T, F) tensors
 
         # Collect feature lengths from the batch into a tensor
-        feat_lengths = torch.LongTensor([feat.shape[0] for feat, _, _ in batch])  # B (time dimension after transpose)
+        feat_lengths = torch.LongTensor([feat.shape[1] for feat, _, _ in batch])  # B (time dimension after transpose)
 
         # Pad features to create a batch of fixed-length padded features
         # pad_sequence returns (T, B, F) so we need to transpose to (B, T, F)
