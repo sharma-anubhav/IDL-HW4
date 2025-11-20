@@ -35,7 +35,7 @@ class SelfAttentionEncoderLayer(nn.Module):
     '''
     def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float = 0.1):
         '''
-        Initialize the SelfAttentionEncoderLayer.
+        Initialize the SelfAttentionEncoderLayer. 
         Args:
             d_model   (int): The dimension of the model.
             num_heads (int): The number of attention heads.
@@ -43,29 +43,28 @@ class SelfAttentionEncoderLayer(nn.Module):
             dropout (float): The dropout rate.
         '''
         super().__init__()
-
-        # Initialize the sublayers
-        self.self_attn = SelfAttentionLayer(d_model, num_heads, dropout)  # Self-attention layer
-        self.ffn = FeedForwardLayer(d_model, d_ff, dropout)  # Feed-forward network
+        
+        # Initialize the sublayers      
+        self.self_attn = SelfAttentionLayer(d_model=d_model, num_heads=num_heads, dropout=dropout) # Self-attention layer
+        self.ffn = FeedForwardLayer(d_model=d_model, d_ff=d_ff, dropout=dropout) # Feed-forward network
 
     def forward(self, x: torch.Tensor, key_padding_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         '''
         Forward pass for the EncoderLayer.
         Args:
-            x (torch.Tensor): The input tensor. shape: (batch_size, seq_len, d_model)
+            x (torch.Tensor): The input tensor. shape: (batch_size, seq_len, d_model)   
             key_padding_mask (torch.Tensor): The padding mask for the input. shape: (batch_size, seq_len)
 
         Returns:
             x (torch.Tensor): The output tensor. shape: (batch_size, seq_len, d_model)
-            mha_attn_weights (torch.Tensor): The attention weights. shape: (batch_size, seq_len, seq_len)
+            mha_attn_weights (torch.Tensor): The attention weights. shape: (batch_size, seq_len, seq_len)   
         '''
-        # Apply self-attention (without causal mask since this is the encoder)
-        # The main difference from decoder is that we pass attn_mask=None to allow attention to all positions
+        # Apply self-attention (no causal mask - can attend to all positions)
         x, mha_attn_weights = self.self_attn(x, key_padding_mask=key_padding_mask, attn_mask=None)
-
-        # Apply feed-forward layer
+        
+        # Apply feed-forward network
         x = self.ffn(x)
-
+        
         # Return the output tensor and attention weights
         return x, mha_attn_weights
 

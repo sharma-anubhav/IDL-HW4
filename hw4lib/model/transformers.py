@@ -81,13 +81,13 @@ class DecoderOnlyTransformer(nn.Module):
     A Pre-LN Decoder-Only Transformer model.
     '''
     def __init__(
-            self,
-            num_layers: int,
-            d_model: int,
-            num_heads: int,
-            d_ff: int,
-            dropout: float,
-            max_len: int,
+            self, 
+            num_layers: int, 
+            d_model: int, 
+            num_heads: int, 
+            d_ff: int, 
+            dropout: float, 
+            max_len: int, 
             num_classes: int,
             weight_tying: bool = False,
             layer_drop_rate: float = 0.0,
@@ -107,6 +107,8 @@ class DecoderOnlyTransformer(nn.Module):
             layer_drop_rate: float, layer drop rate (default: 0.0)
         '''
         super().__init__()
+        
+        # TODO: Implement __init__
 
         # Initialize the decoder
         # DO NOT MODIFY THESE ATTRIBUTES
@@ -114,23 +116,22 @@ class DecoderOnlyTransformer(nn.Module):
         self.layer_drop_rate = layer_drop_rate
         self.num_classes     = num_classes
         self.num_layers      = num_layers
+        
+        # TODO: Create a ModuleList of decoder layers based on the number of layers
+        self.dec_layers     = NotImplementedError # ModuleList of decoder layers
 
-        # Create a ModuleList of decoder layers based on the number of layers
-        self.dec_layers     = nn.ModuleList([
-            SelfAttentionDecoderLayer(d_model, num_heads, d_ff, dropout)
-            for _ in range(num_layers)
-        ])
-
-        # Create target embedding and other layers
-        self.target_embedding       = nn.Embedding(num_classes, d_model)
-        self.positional_encoding    = PositionalEncoding(d_model, max_len)
-        self.final_linear           = nn.Linear(d_model, num_classes)
-        self.dropout                = nn.Dropout(dropout)
-        self.norm                   = nn.LayerNorm(d_model)
+        # TODO: Create target embedding and other layers
+        self.target_embedding       = NotImplementedError # Target embedding
+        self.positional_encoding    = NotImplementedError # Positional encoding
+        self.final_linear           = NotImplementedError # Final linear layer
+        self.dropout                = NotImplementedError # Dropout
+        self.norm                   = NotImplementedError # Layer norm
 
         # Weight tying (extra form of regularization, read more about it)
         if weight_tying:
             self.target_embedding.weight = self.final_linear.weight
+
+        raise NotImplementedError # Remove once implemented
 
     def forward(self, padded_targets: torch.Tensor, target_lengths: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, dict]:
         '''
@@ -142,45 +143,47 @@ class DecoderOnlyTransformer(nn.Module):
             seq_out (torch.Tensor): The output sequence. shape: (batch_size, seq_len, d_model)
             runnint_att (dict): The attention weights. shape: (batch_size, seq_len, seq_len)
         '''
-        # DO NOT MODIFY
+        # DO NOT MODIFY 
         if self.training and target_lengths is None:
             raise ValueError("target_lengths must be provided during training")
+        
+        # TODO: Implement forward
 
-        # Create padding mask for padded_targets on the same device as the input (use PadMask)
+        # TODO: Create padding mask for padded_targets on the same device as the input (use PadMask)
         pad_mask_dec = None
         if target_lengths is not None:
-            pad_mask_dec = PadMask(padded_targets, target_lengths)
+            pad_mask_dec = NotImplementedError
+        
+        # TODO: Create causal mask to prevent attending to future tokens on the same device as the input (use CausalMask)
+        causal_mask = NotImplementedError
 
-        # Create causal mask to prevent attending to future tokens on the same device as the input (use CausalMask)
-        causal_mask = CausalMask(padded_targets.shape[1], padded_targets.device)
+        # TODO: Apply the embedding
+        x = NotImplementedError
+        # TODO: Apply positional encoding
+        x = NotImplementedError
+        # TODO: Apply dropout 
+        x = NotImplementedError
 
-        # Apply the embedding
-        x = self.target_embedding(padded_targets)
-        # Apply positional encoding
-        x = self.positional_encoding(x)
-        # Apply dropout
-        x = self.dropout(x)
-
-        # Pass through all decoder layers, save attention masks
+        # TODO: Pass through all decoder layers, save attention masks
         runnint_att = {}
         for i in range(self.num_layers):
             # Optionally apply LayerDrop during training (More regularization!)
             if self.training and self.layer_drop_rate > 0 and random.random() < self.layer_drop_rate:
                 continue
-
-            # Pass through decoder layer
-            x, attention = self.dec_layers[i](x, pad_mask_dec, causal_mask)
-
-            # Save attention weights
+            
+            # TODO: Pass through decoder layer
+            x, attention = NotImplementedError, NotImplementedError
+            
+            # TODO: Save attention weights  
             runnint_att['layer{}_dec_self'.format(i + 1)] = attention
 
-        # Apply normalization
-        x = self.norm(x)
-        # Linear layer (Final Projection) for next character prediction
-        seq_out = self.final_linear(x)
-
-        # Return the output sequence and running attention weights
-        return seq_out, runnint_att
+        # TODO: Apply normalization
+        x = NotImplementedError
+        # TODO: Linear layer (Final Projection) for next character prediction
+        seq_out = NotImplementedError
+        
+        # TODO: Return the output sequence and running attention weights
+        raise NotImplementedError
     
     def score(self, batch_prompts: torch.Tensor) -> torch.Tensor:
         '''
@@ -211,18 +214,18 @@ class EncoderDecoderTransformer(nn.Module):
     '''
     def __init__(
             self,
-            input_dim: int,
-            time_reduction: int,
-            reduction_method: Literal['lstm', 'conv', 'both'],
+            input_dim: int,  
+            time_reduction: int, 
+            reduction_method: Literal['lstm', 'conv', 'both'], 
             num_encoder_layers: int,
             num_encoder_heads: int,
-            d_ff_encoder: int,
+            d_ff_encoder: int, 
             num_decoder_layers: int,
             num_decoder_heads: int,
             d_ff_decoder: int,
             d_model: int,
-            dropout: float,
-            max_len: int,
+            dropout: float, 
+            max_len: int, 
             num_classes: int,
             weight_tying: bool = False,
             layer_drop_rate: float = 0.0,
@@ -266,54 +269,61 @@ class EncoderDecoderTransformer(nn.Module):
         # Create encoder layers
         # Use ModuleList to create a list of encoder layers
         self.enc_layers = nn.ModuleList([
-            SelfAttentionEncoderLayer(d_model, num_encoder_heads, d_ff_encoder, dropout)
+            SelfAttentionEncoderLayer(d_model=d_model, num_heads=num_encoder_heads, d_ff=d_ff_encoder, dropout=dropout)
             for _ in range(num_encoder_layers)
         ])
 
         # Create decoder layers
         # Use ModuleList to create a list of decoder layers
         self.dec_layers = nn.ModuleList([
-            CrossAttentionDecoderLayer(d_model, num_decoder_heads, d_ff_decoder, dropout)
+            CrossAttentionDecoderLayer(d_model=d_model, num_heads=num_decoder_heads, d_ff=d_ff_decoder, dropout=dropout)
             for _ in range(num_decoder_layers)
         ])
 
         # Create source and target embeddings and other layers
         # Use SpeechEmbedding class to create the source embedding
-        self.source_embedding = SpeechEmbedding(input_dim, d_model, time_reduction, reduction_method, dropout)
+        from .speech_embedding import SpeechEmbedding
+        self.source_embedding = SpeechEmbedding(
+            input_dim=input_dim,
+            output_dim=d_model,
+            time_reduction=time_reduction,
+            reduction_method=reduction_method,
+            dropout=dropout
+        )
 
         # Create the target embedding
         # Use nn.Embedding class to create the target embedding
-        self.target_embedding    = nn.Embedding(num_classes, d_model)
+        self.target_embedding = nn.Embedding(num_classes, d_model)
 
         # Create the positional encoding layer
-        self.positional_encoding = PositionalEncoding(d_model, max_len)
+        self.positional_encoding = PositionalEncoding(d_model=d_model, max_len=max_len)
 
         # Create the final linear layer
-        self.final_linear        = nn.Linear(d_model, num_classes)
+        self.final_linear = nn.Linear(d_model, num_classes)
 
         # Create the dropout layer
-        self.dropout             = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
         # Create the encoder normalization layer
-        self.encoder_norm        = nn.LayerNorm(d_model)
+        self.encoder_norm = nn.LayerNorm(d_model)
 
         # Create the decoder normalization layer
-        self.decoder_norm        = nn.LayerNorm(d_model)
+        self.decoder_norm = nn.LayerNorm(d_model)
 
         # Create the CTC head
         # Use nn.Sequential to create the CTC head
         # CTC head should project the final encoder output from the d_model space to the num_classes space
         # To be compatible with CTCLoss, a log_softmax to the output (See. nn.LogSoftmax)
-        self.ctc_head            = nn.Sequential(
+        self.ctc_head = nn.Sequential(
             nn.Linear(d_model, num_classes),
-            nn.LogSoftmax(dim=2)
+            nn.LogSoftmax(dim=-1)
         )
 
         # Weight tying if enabled (extra form of regularization, read more about it)
         if weight_tying:
             self.target_embedding.weight = self.final_linear.weight
 
-    def encode(self, padded_sources: torch.Tensor, source_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, dict]:
+    def encode(self, padded_sources: torch.Tensor, source_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, dict, dict]:
         '''
         Encodes the source features into a sequence of hidden states.
         Args:
@@ -323,20 +333,20 @@ class EncoderDecoderTransformer(nn.Module):
             x_enc: Encoded representation. shape: (batch_size, src_len, d_model)
             pad_mask_src: Source padding mask. shape: (batch_size, src_len)
             running_att: Dictionary containing encoder self-attention weights
-            ctc_inputs: Dictionary of CTC input and source lengths. shape: (src_len, batch_size, d_model), (batch_size,)
+            ctc_inputs: Dictionary of CTC input and source lengths. shape: (src_len, batch_size, d_model), (batch_size,) 
                         Keys: 'log_probs' and 'lengths'
                         Required for CTC loss computation
         '''
 
         # Apply speech embedding
         x_enc, x_enc_lengths = self.source_embedding(padded_sources, source_lengths)
-
+        
         # Apply positional encoding if not skipped
         # You can try to optionally skipping positional encoding if using an LSTM based speech embedding
-        # LSTM embeddings on their own can be sufficient to capture the positional information
+        # LSTM embeddings on their own can be sufficient to capture the positional information    
         if not self.skip_encoder_pe:
             x_enc = self.positional_encoding(x_enc)
-
+        
         # Apply dropout
         x_enc = self.dropout(x_enc)
 
@@ -350,27 +360,30 @@ class EncoderDecoderTransformer(nn.Module):
             if self.training and self.layer_drop_rate > 0 and random.random() < self.layer_drop_rate:
                 continue
             # Pass through encoder layer
-            x_enc, attention = self.enc_layers[i](x_enc, pad_mask_src)
-
+            x_enc, attention = self.enc_layers[i](x_enc, key_padding_mask=pad_mask_src)
+            
             # Save attention weights
             running_att[f'layer{i+1}_enc_self'] = attention
 
         # Apply normalization
         x_enc = self.encoder_norm(x_enc)
+        
         # Project to CTC logits
-        ctc_logits = self.ctc_head(x_enc)
+        ctc_logits = self.ctc_head(x_enc)  # (batch_size, src_len, num_classes)
+        
+        # CTC requires (src_len, batch_size, num_classes) format
+        ctc_logits = ctc_logits.transpose(0, 1)  # (src_len, batch_size, num_classes)
 
         # Return the encoded representation, padding mask, running attention weights, and CTC inputs (see docstring)
-        # Transpose ctc_logits to (src_len, batch_size, num_classes) for CTCLoss
         ctc_inputs = {
-            'log_probs': ctc_logits.transpose(0, 1),
+            'log_probs': ctc_logits,
             'lengths': x_enc_lengths
         }
         return x_enc, pad_mask_src, running_att, ctc_inputs
 
     def decode(
-        self,
-        padded_targets: torch.Tensor,
+        self, 
+        padded_targets: torch.Tensor, 
         encoder_output: torch.Tensor,
         target_lengths: Optional[torch.Tensor] = None,
         pad_mask_src: Optional[torch.Tensor] = None
@@ -386,7 +399,6 @@ class EncoderDecoderTransformer(nn.Module):
             seq_out: The output sequence. shape: (batch_size, tgt_len, num_classes)
             running_att: Dictionary containing decoder attention weights
         '''
-
         # Create target padding mask on the same device as the input
         pad_mask_tgt = None
         if target_lengths is not None:
@@ -396,13 +408,13 @@ class EncoderDecoderTransformer(nn.Module):
             warnings.warn("pad_mask_tgt is None, unless you are using the decoder as a standalone model or doing inference, you should provide target_lengths")
 
         # Create causal mask on the same device as the input
-        causal_mask = CausalMask(padded_targets.shape[1], padded_targets.device)
+        causal_mask = CausalMask(padded_targets)
 
-        # Apply the embedding, positional encoding, and dropout
+        # Apply the embedding
         x_dec = self.target_embedding(padded_targets)
 
         # Apply positional encoding if not skipped
-        # Shouldn't really be doing this. Included for completeness.
+        # Shouldn't really be doing this. Included for completeness.  
         if not self.skip_decoder_pe:
             x_dec = self.positional_encoding(x_dec)
 
@@ -416,12 +428,13 @@ class EncoderDecoderTransformer(nn.Module):
                 continue
             # Pass through decoder layer
             x_dec, self_attn, cross_attn = self.dec_layers[i](
-                x_dec, encoder_output,
+                x_dec, 
+                enc_output=encoder_output,
                 dec_key_padding_mask=pad_mask_tgt,
                 enc_key_padding_mask=pad_mask_src,
                 attn_mask=causal_mask
             )
-
+            
             # Save attention weights
             running_att[f'layer{i+1}_dec_self'] = self_attn
             running_att[f'layer{i+1}_dec_cross'] = cross_attn
@@ -444,17 +457,17 @@ class EncoderDecoderTransformer(nn.Module):
     ) -> Tuple[torch.Tensor, dict]:
         '''
         Forward pass for the encoder-decoder transformer.
-
+        
         Args:
             padded_sources: The padded source sequences. shape: (batch_size, src_len, input_dim)
             padded_targets: The padded target sequences. shape: (batch_size, tgt_len)
             source_lengths: The lengths of source sequences. shape: (batch_size,)
             target_lengths: The lengths of target sequences. shape: (batch_size,)
-
+            
         Returns:
             seq_out: The output sequence logits. shape: (batch_size, tgt_len, num_classes)
             running_att: Dictionary containing all attention weights from both encoder and decoder
-            ctc_inputs: Dictionary of CTC input and source lengths. shape: (src_len, batch_size, d_model), (batch_size,)
+            ctc_inputs: Dictionary of CTC input and source lengths. shape: (src_len, batch_size, d_model), (batch_size,) 
                         Keys: 'log_probs' and 'lengths'
                         Required for CTC loss computation
         '''
@@ -464,16 +477,16 @@ class EncoderDecoderTransformer(nn.Module):
 
         if self.training and source_lengths is None:
             raise ValueError("source_lengths must be provided during training")
-
+        
         # Encode the source sequence
         encoder_output, pad_mask_src, enc_running_att, ctc_inputs = self.encode(padded_sources, source_lengths)
-
+        
         # Decode using encoder output
         seq_out, dec_running_att = self.decode(padded_targets, encoder_output, target_lengths, pad_mask_src)
-
+        
         # Combine attention dictionaries
         running_att = {**enc_running_att, **dec_running_att}
-
+        
         # Return the output sequence, running attention weights, and CTC inputs (see docstring)
         return seq_out, running_att, ctc_inputs
 

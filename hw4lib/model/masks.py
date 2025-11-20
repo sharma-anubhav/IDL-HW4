@@ -15,27 +15,34 @@ Specification:
 - Mask should be on same device as input tensor
 '''
 def PadMask(padded_input, input_lengths):
-    """
-    Create a mask to identify non-padding positions.
+    """ 
+    Create a mask to identify non-padding positions. 
     Args:
         padded_input: The input tensor with padding, shape (N, T, ...) or (N, T).
         input_lengths: The actual lengths of each sequence before padding, shape (N,).
     Returns:
-        A boolean mask tensor with shape (N, T), where:
-            - padding positions are marked with True
+        A boolean mask tensor with shape (N, T), where: 
+            - padding positions are marked with True 
             - non-padding positions are marked with False.
     """
-    batch_size, seq_len = padded_input.shape[0], padded_input.shape[1]
-
-    # Create a range tensor for sequence positions
-    positions = torch.arange(seq_len, device=padded_input.device).unsqueeze(0)  # (1, T)
-
-    # Expand input_lengths to match dimensions
-    lengths_expanded = input_lengths.unsqueeze(1)  # (N, 1)
-
-    # Create mask: True where position >= length (padding), False where position < length (valid)
-    mask = positions >= lengths_expanded  # (N, T)
-
+    # Get sequence length from padded_input
+    if padded_input.dim() >= 2:
+        seq_len = padded_input.size(1)
+    else:
+        seq_len = padded_input.size(0)
+    
+    # Get batch size
+    batch_size = padded_input.size(0)
+    
+    # Create a range tensor [0, 1, 2, ..., seq_len-1]
+    positions = torch.arange(seq_len, device=padded_input.device).unsqueeze(0).expand(batch_size, seq_len)
+    
+    # Expand input_lengths to match positions shape
+    lengths = input_lengths.unsqueeze(1).expand(batch_size, seq_len)
+    
+    # Mask is True where position >= length (i.e., padding positions)
+    mask = positions >= lengths
+    
     return mask
 
 ''' 
@@ -50,22 +57,27 @@ Specification:
 - Mask should be on same device as input tensor
 - Mask should be upper triangular (excluding diagonal)
 '''
-def CausalMask(seq_len, device):
-    """
-    Create a mask to identify non-causal positions.
+def CausalMask(padded_input):
+    """ 
+    Create a mask to identify non-causal positions. 
     Args:
-        seq_len: The sequence length T.
-        device: The device to place the mask on.
-
+        padded_input: The input tensor with padding, shape (N, T, ...) or (N, T).
+    
     Returns:
-        A boolean mask tensor with shape (T, T), where:
-            - non-causal positions (don't attend to) are marked with True
+        A boolean mask tensor with shape (T, T), where: 
+            - non-causal positions (don't attend to) are marked with True 
             - causal positions (can attend to) are marked with False.
     """
-    # Create a causal mask where future positions are masked out
-    # Create a triangular matrix: rows are query positions, columns are key positions
-    # We want positions to attend to themselves and previous positions only
-    causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1).bool()
-
-    return causal_mask
+    # Get sequence length from padded_input
+    if padded_input.dim() >= 2:
+        seq_len = padded_input.size(1)
+    else:
+        seq_len = padded_input.size(0)
+    
+    # Create upper triangular mask (excluding diagonal)
+    # torch.triu with diagonal=1 creates upper triangular matrix with True values above diagonal
+    # This means: position i cannot attend to position j if j > i (future positions)
+    mask = torch.triu(torch.ones(seq_len, seq_len, dtype=torch.bool, device=padded_input.device), diagonal=1)
+    
+    return mask
 
