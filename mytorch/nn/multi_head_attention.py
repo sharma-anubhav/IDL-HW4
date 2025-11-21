@@ -99,35 +99,20 @@ class MultiHeadAttention:
 
         # TODO: Implement backward pass 
 
-        # Backpropagate through the output projection   
-        # (N, L, embed_dim) -> (N, L, embed_dim) 
         d_attn_output = self.out_proj.backward(d_output)
 
-        # Split the gradients into multiple heads
-        # (N, L, embed_dim) -> (N, num_heads, L, embed_dim // num_heads)
         d_attn_outputs = self._split_heads(d_attn_output)
 
-        # Backpropagate through the attention mechanism
-        # (N, num_heads, L, embed_dim // num_heads) -> (N, num_heads, L, embed_dim // num_heads)
         d_q, d_k, d_v = self.attention.backward(d_attn_outputs)
 
-        # Merge the gradients
-        # (N, num_heads, L, embed_dim // num_heads) -> (N, L, embed_dim)    
         d_q = self._concat_heads(d_q)
-        # (N, num_heads, S, embed_dim // num_heads) -> (N, S, embed_dim)
         d_k = self._concat_heads(d_k)
-        # (N, num_heads, S, embed_dim // num_heads) -> (N, S, embed_dim)
         d_v = self._concat_heads(d_v)
 
-        # Backpropagate through the input projections   
-        # (N, L, embed_dim) -> (N, L, E)
         d_q = self.q_proj.backward(d_q)
-        # (N, S, embed_dim) -> (N, S, E)
         d_k = self.k_proj.backward(d_k)
-        # (N, S, embed_dim) -> (N, S, E)
         d_v = self.v_proj.backward(d_v)
 
-        # Return gradients d_q, d_k, d_v
         return d_q, d_k, d_v
 
     def _merge_masks(self, key_padding_mask, attn_mask):
@@ -139,31 +124,22 @@ class MultiHeadAttention:
         """
         # TODO: Implement merge masks
 
-        # Initialize combined_mask
         combined_mask = None
         
-        # Expand key_padding_mask to (N, 1, 1, S) and broadcast to (N, H, L, S)
         if key_padding_mask is not None:
-            # key_padding_mask: (N, S) -> (N, 1, 1, S)
             key_mask = np.expand_dims(np.expand_dims(key_padding_mask, axis=1), axis=1)
-            # Broadcast to (N, H, L, S)
             key_mask = np.broadcast_to(key_mask, (self.N, self.num_heads, self.L, self.S))
             combined_mask = key_mask
         
-        # Expand attn_mask to (1, 1, L, S) and broadcast to (N, H, L, S)
         if attn_mask is not None:
-            # attn_mask: (L, S) -> (1, 1, L, S)
             attention_mask = np.expand_dims(np.expand_dims(attn_mask, axis=0), axis=0)
-            # Broadcast to (N, H, L, S)
             attention_mask = np.broadcast_to(attention_mask, (self.N, self.num_heads, self.L, self.S))
             
-            # Combine masks using logical_or - if either mask is True, we want to mask that position
             if combined_mask is not None:
                 combined_mask = np.logical_or(combined_mask, attention_mask)
             else:
                 combined_mask = attention_mask
         
-        # Return combined mask (or None if both masks are None)
         return combined_mask
 
     def _split_heads(self, x):
@@ -175,13 +151,10 @@ class MultiHeadAttention:
         """
         # TODO: Implement split heads
 
-        # Reshape: (N, L, embed_dim) -> (N, L, num_heads, embed_dim // num_heads)
         x = x.reshape(x.shape[0], x.shape[1], self.num_heads, self.embed_dim // self.num_heads)
         
-        # Transpose: (N, L, num_heads, embed_dim // num_heads) -> (N, num_heads, L, embed_dim // num_heads)
         x = np.transpose(x, (0, 2, 1, 3))
         
-        # Return x
         return x
 
     def _concat_heads(self, x):
@@ -192,11 +165,8 @@ class MultiHeadAttention:
         :return: (N, L, embed_dim)
         """
         # TODO: Implement concat heads
-        # Transpose: (N, num_heads, L, embed_dim // num_heads) -> (N, L, num_heads, embed_dim // num_heads)
         x = np.transpose(x, (0, 2, 1, 3))
         
-        # Reshape: (N, L, num_heads, embed_dim // num_heads) -> (N, L, embed_dim)
         x = x.reshape(x.shape[0], x.shape[1], self.embed_dim)
         
-        # Return x
         return x

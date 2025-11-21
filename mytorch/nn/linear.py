@@ -29,22 +29,13 @@ class Linear:
         """
         # TODO: Implement forward pass
         
-        # Store input for backward pass
         self.A = A
         
-        # Reshape A to 2D: (*, in_features) -> (batch_size, in_features)
-        # where batch_size is the product of all dimensions except the last
         original_shape = A.shape
         A_2d = A.reshape(-1, A.shape[-1])  # (batch_size, in_features)
         
-        # Compute Z = A @ W^T + b
-        # A_2d: (batch_size, in_features)
-        # W: (out_features, in_features)
-        # Z: (batch_size, out_features)
         Z_2d = A_2d @ self.W.T + self.b
         
-        # Reshape back to original shape but with out_features as last dimension
-        # (*, in_features) -> (*, out_features)
         Z = Z_2d.reshape(*original_shape[:-1], self.W.shape[0])
         
         return Z
@@ -56,31 +47,16 @@ class Linear:
         """
         # TODO: Implement backward pass
 
-        # Reshape inputs to 2D for easier computation
         original_shape = self.A.shape
-        A_2d = self.A.reshape(-1, self.A.shape[-1])  # (batch_size, in_features)
-        dLdZ_2d = dLdZ.reshape(-1, dLdZ.shape[-1])  # (batch_size, out_features)
+        A_2d = self.A.reshape(-1, self.A.shape[-1])
+        dLdZ_2d = dLdZ.reshape(-1, dLdZ.shape[-1])
         
-        # Compute gradients
-        # dL/dW = dL/dZ @ A
-        # dLdZ_2d: (batch_size, out_features)
-        # A_2d: (batch_size, in_features)
-        # dLdW: (out_features, in_features)
-        self.dLdW = dLdZ_2d.T @ A_2d  # (out_features, batch_size) @ (batch_size, in_features) = (out_features, in_features)
+        self.dLdW = dLdZ_2d.T @ A_2d
         
-        # dL/db = sum over batch dimension of dL/dZ
-        # dLdZ_2d: (batch_size, out_features)
-        # dLdb: (out_features,)
-        self.dLdb = np.sum(dLdZ_2d, axis=0)  # Sum over batch dimension
+        self.dLdb = np.sum(dLdZ_2d, axis=0)
+
+        dLdA_2d = dLdZ_2d @ self.W
         
-        # dL/dA = dL/dZ @ W
-        # dLdZ_2d: (batch_size, out_features)
-        # W: (out_features, in_features)
-        # dLdA_2d: (batch_size, in_features)
-        dLdA_2d = dLdZ_2d @ self.W  # (batch_size, out_features) @ (out_features, in_features) = (batch_size, in_features)
-        
-        # Reshape back to original shape
         self.dLdA = dLdA_2d.reshape(original_shape)
         
-        # Return gradient of loss wrt input
         return self.dLdA

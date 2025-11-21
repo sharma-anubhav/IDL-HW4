@@ -41,13 +41,10 @@ class SelfAttentionLayer(nn.Module):
         '''
         super().__init__()
         
-        # Initialize the multi-head attention mechanism (use nn.MultiheadAttention)
         self.mha = nn.MultiheadAttention(embed_dim=d_model, num_heads=num_heads, dropout=dropout, batch_first=True)
         
-        # Initialize the normalization layer (use nn.LayerNorm)
         self.norm = nn.LayerNorm(d_model)
         
-        # Initialize the dropout layer
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor, key_padding_mask: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -62,15 +59,10 @@ class SelfAttentionLayer(nn.Module):
             x (torch.Tensor): The output tensor. shape: (batch_size, seq_len, d_model)
             mha_attn_weights (torch.Tensor): The attention weights. shape: (batch_size, seq_len, seq_len)   
         '''
-        # Store residual connection
         residual = x
         
-        # Apply pre-normalization
         x_norm = self.norm(x)
         
-        # Self-attention
-        # Be sure to use the correct arguments for the multi-head attention layer
-        # Set need_weights to True and average_attn_weights to True so we can get the attention weights 
         x, mha_attn_weights = self.mha(
             query=x_norm,
             key=x_norm,
@@ -81,11 +73,9 @@ class SelfAttentionLayer(nn.Module):
             average_attn_weights=True
         )
         
-        # Apply dropout and then add residual connection
         x = self.dropout(x)
         x = x + residual
         
-        # Return the output tensor and attention weights
         return x, mha_attn_weights
     
 ## -------------------------------------------------------------------------------------------------  
@@ -194,8 +184,6 @@ class FeedForwardLayer(nn.Module):
         '''
         super().__init__()
         
-        # Initialize the feed-forward network (use nn.Sequential)
-        # First linear layer: d_model -> d_ff, GELU activation, Dropout, Second linear layer: d_ff -> d_model
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.GELU(),
@@ -218,21 +206,15 @@ class FeedForwardLayer(nn.Module):
         Returns:
             x (torch.Tensor): The output tensor. shape: (batch_size, seq_len, d_model)
         ''' 
-        # Store residual connection
         residual = x
         
-        # Apply pre-normalization
         x_norm = self.norm(x)
         
-        # Apply feed-forward network
         x = self.ffn(x_norm)
         
-        # Apply dropout to the output of the feed-forward network before adding the residual connection
         x = self.dropout(x)
         
-        # Add residual connection
         x = x + residual
         
-        # Return the output tensor
         return x
     

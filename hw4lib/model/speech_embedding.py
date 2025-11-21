@@ -62,10 +62,8 @@ class StackedBLSTMEmbedding(nn.Module):
         if not 0 <= dropout < 1:
             raise ValueError("Dropout rate must be between 0 and 1")
             
-        # Calculate strides for the two pooling layers
         self.stride1, self.stride2 = self.closest_factors(time_reduction)
         
-        # Pool configurations
         self.pool1_params = {
             "kernel_size": self.stride1,
             "stride": self.stride1,
@@ -79,7 +77,6 @@ class StackedBLSTMEmbedding(nn.Module):
             "dilation": 1
         }
         
-        # First BLSTM layer
         self.blstm1 = nn.LSTM(
             input_dim, hidden_dim // 2,
             num_layers=1,
@@ -87,7 +84,6 @@ class StackedBLSTMEmbedding(nn.Module):
             bidirectional=True
         )
         
-        # Second BLSTM layer
         self.blstm2 = nn.LSTM(
             hidden_dim, hidden_dim // 2,
             num_layers=1,
@@ -95,11 +91,9 @@ class StackedBLSTMEmbedding(nn.Module):
             bidirectional=True
         )
         
-        # Max pooling layers
         self.pool1 = nn.MaxPool1d(**self.pool1_params)
         self.pool2 = nn.MaxPool1d(**self.pool2_params)
         
-        # Final linear embedding and dropout
         self.linear_embed = nn.Linear(hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout)
 
@@ -126,9 +120,7 @@ class StackedBLSTMEmbedding(nn.Module):
         """
         Calculate the downsampled length after all pooling operations.
         """
-        # Apply pool1 length calculation
         lengths = self.calculate_pool_output_length(lengths, self.pool1_params)
-        # Apply pool2 length calculation
         lengths = self.calculate_pool_output_length(lengths, self.pool2_params)
         return lengths
 
@@ -140,29 +132,24 @@ class StackedBLSTMEmbedding(nn.Module):
         Returns:
             tuple: (output tensor, downsampled lengths)
         """
-        # First BLSTM
         packed_input = pack_padded_sequence(x, x_len.cpu(), batch_first=True, enforce_sorted=False)
         packed_output, _ = self.blstm1(packed_input)
         output, _ = pad_packed_sequence(packed_output, batch_first=True, total_length=x.size(1))
         
-        # First max pooling
         output = output.transpose(1, 2)  # (batch, hidden_dim, seq_len)
         output = self.pool1(output)
         output = output.transpose(1, 2)  # (batch, seq_len, hidden_dim)
         x_len = self.calculate_pool_output_length(x_len, self.pool1_params)
         
-        # Second BLSTM
         packed_input = pack_padded_sequence(output, x_len.cpu(), batch_first=True, enforce_sorted=False)
         packed_output, _ = self.blstm2(packed_input)
         output, _ = pad_packed_sequence(packed_output, batch_first=True, total_length=output.size(1))
         
-        # Second max pooling
         output = output.transpose(1, 2)
         output = self.pool2(output)
         output = output.transpose(1, 2)
         x_len = self.calculate_pool_output_length(x_len, self.pool2_params)
         
-        # Final linear embedding and dropout
         output = self.linear_embed(output)
         output = self.dropout(output)
         
@@ -199,7 +186,6 @@ class Conv2DSubsampling(torch.nn.Module):
         linear_in_dim = self.calculate_downsampled_length(input_dim, 1, 1)
         linear_in_dim *= output_dim
         # TODO: Replace the Linear layer with adaptive pooling and test the performance
-        # self.freq_pool = torch.nn.AdaptiveAvgPool2d((None, 1))  # Pool across frequency only
         self.linear_out = torch.nn.Linear(linear_in_dim, output_dim)
         self.dropout = torch.nn.Dropout(dropout)
 

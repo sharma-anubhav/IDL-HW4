@@ -166,40 +166,31 @@ class SequenceGenerator:
         
         # TODO: Implement greedy search
         batch_size = x.size(0)
-        sequences = x.clone()  # Start with input sequences
+        sequences = x.clone()  
         scores = torch.zeros(batch_size, device=x.device)
         finished = torch.zeros(batch_size, dtype=torch.bool, device=x.device)
         
         for _ in range(self.max_length - x.size(1)):
-            # Check if all sequences have finished
             if finished.all():
                 break
             
-            # Get logits for next token
-            next_logits = self.score_fn(sequences)  # (batch_size, vocab_size)
+            next_logits = self.score_fn(sequences)
             
-            # Apply temperature
             if temperature != 1.0:
                 next_logits = next_logits / temperature
             
-            # Apply repeat penalty
             if repeat_penalty != 1.0:
                 next_logits = self._apply_repeat_penalty(next_logits, sequences, repeat_penalty)
-            
-            # Get log probabilities
+
             log_probs = torch.log_softmax(next_logits, dim=-1)
             
-            # Greedy selection: pick the most likely token
-            next_tokens = torch.argmax(log_probs, dim=-1)  # (batch_size,)
-            token_scores = log_probs.gather(1, next_tokens.unsqueeze(1)).squeeze(1)  # (batch_size,)
-            
-            # Update scores only for unfinished sequences
+            next_tokens = torch.argmax(log_probs, dim=-1)
+            token_scores = log_probs.gather(1, next_tokens.unsqueeze(1)).squeeze(1)
+
             scores = torch.where(finished, scores, scores + token_scores)
             
-            # Append next tokens
-            sequences = torch.cat([sequences, next_tokens.unsqueeze(1)], dim=1)  # (batch_size, seq_len + 1)
+            sequences = torch.cat([sequences, next_tokens.unsqueeze(1)], dim=1)
             
-            # Check if any sequence has reached EOS
             is_eos = (next_tokens == self.tokenizer.eos_id)
             finished = finished | is_eos
         
@@ -238,36 +229,25 @@ class SequenceGenerator:
         batch_size = x.size(0)
         initial_seq_len = x.size(1)
         
-        # Initialize beams: each batch item has beam_width candidates
-        # sequences: (batch_size, beam_width, max_seq_len) - will grow dynamically
-        # scores: (batch_size, beam_width)
-        sequences = x.unsqueeze(1).expand(batch_size, beam_width, -1).clone()  # (batch_size, beam_width, initial_seq_len)
+        sequences = x.unsqueeze(1).expand(batch_size, beam_width, -1).clone()
         scores = torch.zeros(batch_size, beam_width, device=x.device)
         finished = torch.zeros(batch_size, beam_width, dtype=torch.bool, device=x.device)
         
         for step in range(self.max_length - initial_seq_len):
-            # Check if all beams for all batches have finished
             if finished.all():
                 break
             
             current_seq_len = sequences.size(2)
-            
-            # Process each batch item separately
-            # The score_fn uses self.trees[batch_idx] for the batch_idx-th input
-            # So we need to create a wrapper that uses the correct tree for each batch
+
             batch_log_probs_list = []
             vocab_size = None
             
             for batch_idx in range(batch_size):
-                batch_sequences = sequences[batch_idx]  # (beam_width, current_seq_len)
+                batch_sequences = sequences[batch_idx]
                 beam_log_probs_list = []
                 
-                # Check if score_fn is a DeterministicScoreFn (from tests)
-                # If so, create a temporary wrapper that uses the correct tree for this batch
                 if hasattr(self.score_fn, 'trees') and hasattr(self.score_fn, 'tokenizer'):
-                    # It's a DeterministicScoreFn - create a temporary one with the correct tree
-                    # Create a simple wrapper class inline
-                    original_score_fn = self.score_fn  # Capture in closure
+                    original_score_fn = self.score_fn
                     class BatchScoreFn:
                         def __init__(self, tree, tokenizer, original_fn):
                             self.tree = tree
@@ -278,62 +258,49 @@ class SequenceGenerator:
                             seq_len = x.size(1)
                             scores = torch.full((batch_size, seq_len, self.tokenizer.vocab_size), 1.0)
                             for i in range(batch_size):
-                                # Use update_scores from the original score_fn
                                 scores[i, -1, :] = self.original_fn.update_scores(self.tree, x[i])
                             return scores[:, -1, :].log_softmax(dim=-1)
                     
-                    # Create wrapper with correct tree
                     temp_score_fn = BatchScoreFn(self.score_fn.trees[batch_idx], self.score_fn.tokenizer, self.score_fn)
                 else:
-                    # For other score functions, use the original
                     temp_score_fn = self.score_fn
                 
-                # Call score_fn for each beam separately
                 for beam_idx in range(beam_width):
-                    # Get single beam sequence: (1, current_seq_len)
-                    beam_sequence = batch_sequences[beam_idx:beam_idx+1]  # (1, current_seq_len)
+                    beam_sequence = batch_sequences[beam_idx:beam_idx+1]
                     
-                    # Call score_fn with single sequence
-                    beam_logits = temp_score_fn(beam_sequence)  # (1, vocab_size)
+                    beam_logits = temp_score_fn(beam_sequence)
                     if vocab_size is None:
                         vocab_size = beam_logits.size(-1)
                     
-                    beam_logits = beam_logits.squeeze(0)  # (vocab_size,)
-                    
-                    # Apply temperature
+                    beam_logits = beam_logits.squeeze(0)
+
                     if temperature != 1.0:
                         beam_logits = beam_logits / temperature
                     
-                    # Apply repeat penalty
                     if repeat_penalty != 1.0:
-                        beam_logits = beam_logits.unsqueeze(0)  # (1, vocab_size)
-                        beam_seq_for_penalty = beam_sequence  # (1, current_seq_len)
+                        beam_logits = beam_logits.unsqueeze(0)
+                        beam_seq_for_penalty = beam_sequence
                         beam_logits = self._apply_repeat_penalty(beam_logits, beam_seq_for_penalty, repeat_penalty)
-                        beam_logits = beam_logits.squeeze(0)  # (vocab_size,)
+                        beam_logits = beam_logits.squeeze(0)
                     
-                    # Get log probabilities
-                    beam_log_probs = torch.log_softmax(beam_logits, dim=-1)  # (vocab_size,)
+                    beam_log_probs = torch.log_softmax(beam_logits, dim=-1)
                     beam_log_probs_list.append(beam_log_probs)
                 
-                # Stack beams: (beam_width, vocab_size)
                 batch_log_probs = torch.stack(beam_log_probs_list)
                 batch_log_probs_list.append(batch_log_probs)
             
-            # Stack to get (batch_size, beam_width, vocab_size)
-            log_probs = torch.stack(batch_log_probs_list)  # (batch_size, beam_width, vocab_size)
+            log_probs = torch.stack(batch_log_probs_list)
             
-            # For each batch item, expand beams and select top beam_width
             new_sequences_list = []
             new_scores_list = []
             new_finished_list = []
             
             for batch_idx in range(batch_size):
-                batch_log_probs = log_probs[batch_idx]  # (beam_width, vocab_size)
-                batch_scores = scores[batch_idx]  # (beam_width,)
-                batch_finished = finished[batch_idx]  # (beam_width,)
-                batch_sequences = sequences[batch_idx]  # (beam_width, current_seq_len)
+                batch_log_probs = log_probs[batch_idx]
+                batch_scores = scores[batch_idx]
+                batch_finished = finished[batch_idx]
+                batch_sequences = sequences[batch_idx]
                 
-                # Collect all candidates
                 candidates_scores = []
                 candidates_tokens = []
                 candidates_sequences = []
@@ -341,13 +308,11 @@ class SequenceGenerator:
                 
                 for beam_idx in range(beam_width):
                     if batch_finished[beam_idx]:
-                        # If beam is finished, keep it as is (don't expand)
                         candidates_scores.append(batch_scores[beam_idx])
                         candidates_tokens.append(None)
                         candidates_sequences.append(batch_sequences[beam_idx])
                         candidates_finished.append(True)
                     else:
-                        # Expand this beam: get top beam_width tokens
                         top_k = min(beam_width, vocab_size)
                         top_log_probs_beam, top_indices_beam = torch.topk(
                             batch_log_probs[beam_idx], top_k, dim=-1
@@ -363,18 +328,14 @@ class SequenceGenerator:
                             candidates_sequences.append(batch_sequences[beam_idx])
                             candidates_finished.append(False)
                 
-                # Select top beam_width candidates based on cumulative scores
                 candidates_scores_tensor = torch.tensor(candidates_scores, device=x.device)
                 
-                # Sort by score (descending), using stable sort to maintain order for ties
                 sorted_indices = torch.argsort(
                     -candidates_scores_tensor, 
                     stable=True, 
                     descending=False
                 )
                 
-                # Select top beam_width unique candidates
-                # Track selected sequences to avoid duplicates
                 selected_indices = []
                 seen_sequences = set()
                 
@@ -382,21 +343,14 @@ class SequenceGenerator:
                     if len(selected_indices) >= beam_width:
                         break
                     
-                    # Check if this candidate is unique (by sequence + token combination)
                     prev_seq = candidates_sequences[idx]
                     is_finished = candidates_finished[idx]
                     token = candidates_tokens[idx] if not is_finished else None
                     
-                    # Create a unique identifier for this candidate
-                    # For unfinished sequences, use sequence + next token to ensure diversity
-                    # For finished sequences, use just the sequence (they're already complete)
                     if token is not None:
-                        # Create a hashable key: (sequence_tuple, next_token)
-                        # This ensures that the same sequence expanding with different tokens are considered different
                         seq_list = prev_seq.cpu().tolist()
                         seq_key = (tuple(seq_list), token.item())
                     else:
-                        # Finished sequence - just use the sequence itself
                         seq_list = prev_seq.cpu().tolist()
                         seq_key = tuple(seq_list)
                     
@@ -404,8 +358,6 @@ class SequenceGenerator:
                         seen_sequences.add(seq_key)
                         selected_indices.append(idx.item())
                 
-                # If we don't have enough unique candidates, fill with best remaining
-                # This ensures we always have exactly beam_width candidates
                 if len(selected_indices) < beam_width:
                     remaining_needed = beam_width - len(selected_indices)
                     for idx in sorted_indices:
@@ -415,7 +367,6 @@ class SequenceGenerator:
                             selected_indices.append(idx.item())
                             remaining_needed -= 1
                 
-                # Build new sequences
                 new_batch_sequences = []
                 new_batch_scores = []
                 new_batch_finished = []
@@ -426,7 +377,6 @@ class SequenceGenerator:
                     
                     if not is_finished:
                         token = candidates_tokens[idx]
-                        # Append new token
                         new_seq = torch.cat([prev_seq, token.unsqueeze(0)], dim=0)
                         new_finished = (token == self.tokenizer.eos_id)
                     else:
@@ -437,7 +387,6 @@ class SequenceGenerator:
                     new_batch_scores.append(candidates_scores_tensor[idx])
                     new_batch_finished.append(new_finished)
                 
-                # Pad all sequences to the same length
                 max_len = max(seq.size(0) for seq in new_batch_sequences)
                 padded_sequences = []
                 for seq in new_batch_sequences:
@@ -451,16 +400,14 @@ class SequenceGenerator:
                 new_scores_list.append(torch.stack(new_batch_scores))
                 new_finished_list.append(torch.tensor(new_batch_finished, device=x.device))
             
-            # Update sequences, scores, and finished
-            sequences = torch.stack(new_sequences_list)  # (batch_size, beam_width, new_seq_len)
-            scores = torch.stack(new_scores_list)  # (batch_size, beam_width)
-            finished = torch.stack(new_finished_list)  # (batch_size, beam_width)
+            sequences = torch.stack(new_sequences_list)
+            scores = torch.stack(new_scores_list)
+            finished = torch.stack(new_finished_list)
         
-        # Sort beams by score (descending) for each batch item
-        sorted_indices = torch.argsort(scores, dim=1, descending=True)  # (batch_size, beam_width)
-        batch_indices = torch.arange(batch_size, device=x.device).unsqueeze(1)  # (batch_size, 1)
-        sequences = sequences[batch_indices, sorted_indices]  # (batch_size, beam_width, seq_len)
-        scores = scores[batch_indices, sorted_indices]  # (batch_size, beam_width)
+        sorted_indices = torch.argsort(scores, dim=1, descending=True)
+        batch_indices = torch.arange(batch_size, device=x.device).unsqueeze(1)
+        sequences = sequences[batch_indices, sorted_indices]
+        scores = scores[batch_indices, sorted_indices]
         
         return sequences, scores
 

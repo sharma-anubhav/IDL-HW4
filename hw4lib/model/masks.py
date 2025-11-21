@@ -68,15 +68,11 @@ def CausalMask(padded_input):
             - non-causal positions (don't attend to) are marked with True 
             - causal positions (can attend to) are marked with False.
     """
-    # Get sequence length from padded_input
     if padded_input.dim() >= 2:
         seq_len = padded_input.size(1)
     else:
         seq_len = padded_input.size(0)
     
-    # Create upper triangular mask (excluding diagonal)
-    # torch.triu with diagonal=1 creates upper triangular matrix with True values above diagonal
-    # This means: position i cannot attend to position j if j > i (future positions)
     mask = torch.triu(torch.ones(seq_len, seq_len, dtype=torch.bool, device=padded_input.device), diagonal=1)
     
     return mask

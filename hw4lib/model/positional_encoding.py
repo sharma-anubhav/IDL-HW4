@@ -42,13 +42,9 @@ class PositionalEncoding(nn.Module):
             - Initializes the positional encoding buffer 'pe' 
               of shape (1, max_len, d_model) (in order to broadcast with input tensor)
         """
-        # Create positional encoding table using sinusoidal encoding
-        # Shape: (max_len, d_model)
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # (max_len, 1)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         
-        # Create div_term for the wavelength calculation
-        # 10000^(2i/d_model) for i in range(d_model//2)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         
         # Apply sin to even indices
@@ -56,10 +52,8 @@ class PositionalEncoding(nn.Module):
         # Apply cos to odd indices
         pe[:, 1::2] = torch.cos(position * div_term)
         
-        # Add batch dimension: (1, max_len, d_model)
         pe = pe.unsqueeze(0)
         
-        # Register as buffer to save with model state
         self.register_buffer('pe', pe)
         
 
@@ -73,12 +67,8 @@ class PositionalEncoding(nn.Module):
         Errors:
             - ValueError: If sequence length exceeds maximum length 
         """
-        # Step 1: Get sequence length from input tensor
         seq_len = x.size(1)
-        # Step 2: Verify sequence length doesn't exceed maximum length, raise error if it does
         if seq_len > self.pe.size(1):
             raise ValueError(f"Sequence length {seq_len} exceeds the maximum length {self.pe.size(1)}")
-        # Step 3: Add positional encodings to input
-        # Slice pe to match sequence length and add to input
         x = x + self.pe[:, :seq_len, :].to(x.device)
         return x
