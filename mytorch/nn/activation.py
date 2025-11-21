@@ -23,8 +23,28 @@ class Softmax:
         # TODO: Implement forward pass
         # Compute the softmax in a numerically stable way
         # Apply it to the dimension specified by the `dim` parameter
-        self.A = NotImplementedError
-        raise NotImplementedError
+        
+        # Normalize dimension index (handle negative indexing)
+        dim = self.dim if self.dim >= 0 else len(Z.shape) + self.dim
+        
+        # Store original shape
+        self.original_shape = Z.shape
+        
+        # For numerical stability, subtract max along the specified dimension
+        # Keep dimensions for broadcasting
+        Z_max = np.max(Z, axis=dim, keepdims=True)
+        Z_shifted = Z - Z_max
+        
+        # Compute exp
+        exp_Z = np.exp(Z_shifted)
+        
+        # Compute sum along the specified dimension
+        sum_exp = np.sum(exp_Z, axis=dim, keepdims=True)
+        
+        # Compute softmax
+        self.A = exp_Z / sum_exp
+        
+        return self.A
 
     def backward(self, dLdA):
         """
@@ -36,20 +56,15 @@ class Softmax:
         # Get the shape of the input
         shape = self.A.shape
         # Find the dimension along which softmax was applied
-        C = shape[self.dim]
-           
-        # Reshape input to 2D
-        if len(shape) > 2:
-            self.A = NotImplementedError
-            dLdA = NotImplementedError
+        dim = self.dim if self.dim >= 0 else len(shape) + self.dim
+        
+        # Compute gradient for softmax
+        # dL/dZ = A * (dL/dA - sum(A * dL/dA))
+        # The sum is computed along the softmax dimension
+        sum_term = np.sum(self.A * dLdA, axis=dim, keepdims=True)  # Sum along softmax dimension
+        dLdZ = self.A * (dLdA - sum_term)  # Element-wise multiplication
 
-        # Reshape back to original dimensions if necessary
-        if len(shape) > 2:
-            # Restore shapes to original
-            self.A = NotImplementedError
-            dLdZ = NotImplementedError
-
-        raise NotImplementedError
+        return dLdZ
  
 
     

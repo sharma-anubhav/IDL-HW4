@@ -20,14 +20,14 @@ class MultiHeadAttention:
         self.num_heads = num_heads
         
         # Initialize your scaled dot product attention layer
-        self.attention = NotImplementedError
+        self.attention = ScaledDotProductAttention()
         
         # Initialize your linear layer
         #  embed_dim -> embed_dim
-        self.q_proj   = NotImplementedError
-        self.k_proj   = NotImplementedError
-        self.v_proj   = NotImplementedError
-        self.out_proj = NotImplementedError
+        self.q_proj   = Linear(embed_dim, embed_dim)
+        self.k_proj   = Linear(embed_dim, embed_dim)
+        self.v_proj   = Linear(embed_dim, embed_dim)
+        self.out_proj = Linear(embed_dim, embed_dim)
 
     def init_weights(self, Wq, bq, Wk, bk, Wv, bv, Wo, bo):
         """
@@ -58,38 +58,38 @@ class MultiHeadAttention:
         
         # Project the query, key, and value inputs into query, key, and value
         # (N, L, E) -> (N, L, embed_dim)
-        q = NotImplementedError
+        q = self.q_proj.forward(query)
         # (N, S, E) -> (N, S, embed_dim)
-        k = NotImplementedError
+        k = self.k_proj.forward(key)
         # (N, S, E) -> (N, S, embed_dim)
-        v = NotImplementedError
+        v = self.v_proj.forward(value)
 
         # Split the query, key, and value into multiple heads
         # (N, L, embed_dim) -> (N, num_heads, L, embed_dim // num_heads)
-        q = NotImplementedError
+        q = self._split_heads(q)
         # (N, S, embed_dim) -> (N, num_heads, S, embed_dim // num_heads)
-        k = NotImplementedError
+        k = self._split_heads(k)
         # (N, S, embed_dim) -> (N, num_heads, S, embed_dim // num_heads)
-        v = NotImplementedError
+        v = self._split_heads(v)
 
         # Merge the masks
         # (N, S) + (L, S) -> (N, H, L, S)
-        mask = NotImplementedError
+        mask = self._merge_masks(key_padding_mask, attn_mask)
 
         # Apply the attention mechanism
         # (N, num_heads, L, embed_dim // num_heads)
-        attn_outputs = NotImplementedError
+        attn_outputs = self.attention.forward(q, k, v, mask=mask)
 
         # Merge the attention outputs   
         # (N, num_heads, L, embed_dim // num_heads) -> (N, L, embed_dim)
-        attn_output = NotImplementedError
+        attn_output = self._concat_heads(attn_outputs)
 
         # Project the attention outputs
         # (N, L, embed_dim) -> (N, L, embed_dim)
-        output = NotImplementedError
+        output = self.out_proj.forward(attn_output)
 
         # Return output
-        raise NotImplementedError
+        return output
 
     def backward(self, d_output):
         """
@@ -101,34 +101,34 @@ class MultiHeadAttention:
 
         # Backpropagate through the output projection   
         # (N, L, embed_dim) -> (N, L, embed_dim) 
-        d_attn_output = NotImplementedError
+        d_attn_output = self.out_proj.backward(d_output)
 
         # Split the gradients into multiple heads
         # (N, L, embed_dim) -> (N, num_heads, L, embed_dim // num_heads)
-        d_attn_outputs = NotImplementedError
+        d_attn_outputs = self._split_heads(d_attn_output)
 
         # Backpropagate through the attention mechanism
         # (N, num_heads, L, embed_dim // num_heads) -> (N, num_heads, L, embed_dim // num_heads)
-        d_q, d_k, d_v = NotImplementedError
+        d_q, d_k, d_v = self.attention.backward(d_attn_outputs)
 
         # Merge the gradients
         # (N, num_heads, L, embed_dim // num_heads) -> (N, L, embed_dim)    
-        d_q = NotImplementedError
+        d_q = self._concat_heads(d_q)
         # (N, num_heads, S, embed_dim // num_heads) -> (N, S, embed_dim)
-        d_k = NotImplementedError
+        d_k = self._concat_heads(d_k)
         # (N, num_heads, S, embed_dim // num_heads) -> (N, S, embed_dim)
-        d_v = NotImplementedError
+        d_v = self._concat_heads(d_v)
 
         # Backpropagate through the input projections   
-        # (N, L, embed_dim) -> (N, L, embed_dim)
-        d_q = NotImplementedError
-        # (N, S, embed_dim) -> (N, S, embed_dim)
-        d_k = NotImplementedError
-        # (N, S, embed_dim) -> (N, S, embed_dim)
-        d_v = NotImplementedError
+        # (N, L, embed_dim) -> (N, L, E)
+        d_q = self.q_proj.backward(d_q)
+        # (N, S, embed_dim) -> (N, S, E)
+        d_k = self.k_proj.backward(d_k)
+        # (N, S, embed_dim) -> (N, S, E)
+        d_v = self.v_proj.backward(d_v)
 
         # Return gradients d_q, d_k, d_v
-        raise NotImplementedError
+        return d_q, d_k, d_v
 
     def _merge_masks(self, key_padding_mask, attn_mask):
         """
@@ -139,17 +139,32 @@ class MultiHeadAttention:
         """
         # TODO: Implement merge masks
 
+        # Initialize combined_mask
+        combined_mask = None
+        
         # Expand key_padding_mask to (N, 1, 1, S) and broadcast to (N, H, L, S)
-        key_mask = NotImplementedError
+        if key_padding_mask is not None:
+            # key_padding_mask: (N, S) -> (N, 1, 1, S)
+            key_mask = np.expand_dims(np.expand_dims(key_padding_mask, axis=1), axis=1)
+            # Broadcast to (N, H, L, S)
+            key_mask = np.broadcast_to(key_mask, (self.N, self.num_heads, self.L, self.S))
+            combined_mask = key_mask
         
         # Expand attn_mask to (1, 1, L, S) and broadcast to (N, H, L, S)
-        attention_mask = NotImplementedError
+        if attn_mask is not None:
+            # attn_mask: (L, S) -> (1, 1, L, S)
+            attention_mask = np.expand_dims(np.expand_dims(attn_mask, axis=0), axis=0)
+            # Broadcast to (N, H, L, S)
+            attention_mask = np.broadcast_to(attention_mask, (self.N, self.num_heads, self.L, self.S))
+            
+            # Combine masks using logical_or - if either mask is True, we want to mask that position
+            if combined_mask is not None:
+                combined_mask = np.logical_or(combined_mask, attention_mask)
+            else:
+                combined_mask = attention_mask
         
-        # Combine masks using logical_or - if either mask is True, we want to mask that position
-        combined_mask = NotImplementedError
-        
-        # Return combined mask
-        raise NotImplementedError
+        # Return combined mask (or None if both masks are None)
+        return combined_mask
 
     def _split_heads(self, x):
         """
@@ -161,13 +176,13 @@ class MultiHeadAttention:
         # TODO: Implement split heads
 
         # Reshape: (N, L, embed_dim) -> (N, L, num_heads, embed_dim // num_heads)
-        x = NotImplementedError
+        x = x.reshape(x.shape[0], x.shape[1], self.num_heads, self.embed_dim // self.num_heads)
         
         # Transpose: (N, L, num_heads, embed_dim // num_heads) -> (N, num_heads, L, embed_dim // num_heads)
-        x = NotImplementedError
+        x = np.transpose(x, (0, 2, 1, 3))
         
         # Return x
-        raise NotImplementedError
+        return x
 
     def _concat_heads(self, x):
         """
@@ -178,10 +193,10 @@ class MultiHeadAttention:
         """
         # TODO: Implement concat heads
         # Transpose: (N, num_heads, L, embed_dim // num_heads) -> (N, L, num_heads, embed_dim // num_heads)
-        x = NotImplementedError
+        x = np.transpose(x, (0, 2, 1, 3))
         
         # Reshape: (N, L, num_heads, embed_dim // num_heads) -> (N, L, embed_dim)
-        x = NotImplementedError
+        x = x.reshape(x.shape[0], x.shape[1], self.embed_dim)
         
         # Return x
-        raise NotImplementedError
+        return x
